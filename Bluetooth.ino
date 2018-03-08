@@ -1,8 +1,5 @@
 #ifdef ENABLE_BLUETOOTH
-#define UUID16_SVC_ENVIRONMENTAL_SENSING  0x181A
-#define UUID16_CHR_TEMPERATURE            0x2A6E
-#define UUID16_CHR_HUMIDITY               0x2A6F
-#define UUID16_CHR_PRESSURE               0x2A6D
+
 
 /*********************************************************************
  This is an example for our nRF52 based Bluefruit LE modules
@@ -18,49 +15,81 @@
  any redistribution
 *********************************************************************/
 #include <bluefruit.h>
+#include "customGATT.h"
 
 /* HRM Service Definitions
  * Heart Rate Monitor Service:  0x180D
  * Heart Rate Measurement Char: 0x2A37
  * Body Sensor Location Char:   0x2A38
  */
-BLEService        environmental_sensing_service   = BLEService(UUID16_SVC_ENVIRONMENTAL_SENSING);
-BLECharacteristic temperature_characteristic      = BLECharacteristic(UUID16_CHR_TEMPERATURE);
-BLECharacteristic humidity_characteristic         = BLECharacteristic(UUID16_CHR_HUMIDITY);
-BLECharacteristic pressure_characteristic         = BLECharacteristic(UUID16_CHR_PRESSURE);
+//BLEService        environmental_sensing_service   = BLEService(UUID16_SVC_ENVIRONMENTAL_SENSING);
+//BLECharacteristic temperature_characteristic      = BLECharacteristic(UUID16_CHR_TEMPERATURE);
+//BLECharacteristic humidity_characteristic         = BLECharacteristic(UUID16_CHR_HUMIDITY);
+//BLECharacteristic pressure_characteristic         = BLECharacteristic(UUID16_CHR_PRESSURE);
 
 
 BLEDis bledis;    // DIS (Device Information Service) helper class instance
 BLEBas blebas;    // BAS (Battery Service) helper class instance
 
 
-bool writeTemperature(float temp){
-  if (temperature_characteristic.write16((uint16_t)temp)){
-      return true;
-    }else{
-      return false;
-    }
+bool writeTemperature(float temp){ 
+  if (temperature_characteristic.write32((int16_t)(temp*100))){ // write32 for int
+    Serial.print("Wrote temperature:\t");Serial.println(temp);
+    return true;
+  }else{
+    return false;
+  }
 }
 bool writeHumidity(float humidity){
-  if (humidity_characteristic.write16((uint16_t)humidity)){
-      return true;
-    }else{
-      return false;
-    }
+  if (humidity_characteristic.write16((uint16_t)(humidity*100))){
+    Serial.print("Wrote humidity:\t\t");Serial.println(humidity);
+    return true;
+  }else{
+    return false;
+  }
+}
+bool writePressure(float pressure){
+  if (pressure_characteristic.write32((uint32_t)(pressure*10))){
+    Serial.print("Wrote pressure:\t\t");Serial.println(pressure);
+    return true;
+  }else{
+    return false;
+  }
+}
+
+bool writeTVOC(float tvoc){
+  if (tvoc_characteristic.write16((uint16_t)(tvoc))){
+    Serial.print("Wrote tvoc:\t\t");Serial.println((uint16_t)tvoc);
+    return true;
+  }else{
+    return false;
+  }
 }
 
 
-bool notifyTemperature(int16_t temp){
-  bool validation = temperature_characteristic.notify32(temp);
-  return validation;
+bool notifyTemperature(float temp){
+  if (temperature_characteristic.notify32((int16_t)(100*temp))){// write32 for int
+    Serial.print("Notifyed temperature:\t");Serial.println(temp);
+    return true;
+  }else{
+    return false;
+  }
 }
-bool notifyHumidity(int16_t hum){
-  bool validation = humidity_characteristic.notify32(hum);
-  return validation;
+bool notifyHumidity(float humidity){
+  if (humidity_characteristic.notify16((uint16_t)(100*humidity))){
+    Serial.print("Notifyed humidity:\t");Serial.println(humidity);
+    return true;
+  }else{
+    return false;
+  }
 }
-bool notifyPressure(uint32_t pressure){
-  bool validation = pressure_characteristic.notify32(pressure);
-  return validation;
+bool notifyPressure(float pressure){
+  if (pressure_characteristic.notify32((uint32_t)(pressure*10))){
+    Serial.print("Notifyed pressure:\t");Serial.println(pressure);
+    return true;
+  }else{
+    return false;
+  }
 }
 
 
@@ -173,6 +202,13 @@ void setupBLE_EnvironmentService(void)
   pressure_characteristic.setCccdWriteCallback(cccd_callback);  // Optionally capture CCCD updates
   pressure_characteristic.begin();
 
+  tvoc_characteristic.setProperties(CHR_PROPS_READ | CHR_PROPS_NOTIFY);
+  tvoc_characteristic.setUserDescriptor("TVOC");
+  tvoc_characteristic.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
+  tvoc_characteristic.setFixedLen(2);
+  tvoc_characteristic.setCccdWriteCallback(cccd_callback);  // Optionally capture CCCD updates
+  //tvoc_characteristic.setPresentationFormatDescriptor(0x6, 0, UUID16_UNIT_PER_MILLE, 0,0);//(type uint16_t, exponent 0, unit ~ppm
+  tvoc_characteristic.begin();
 
   
 }
@@ -230,24 +266,24 @@ void cccd_callback(BLECharacteristic& chr, uint16_t cccd_value)
     if (chr.uuid == temperature_characteristic.uuid) {
         if (chr.notifyEnabled()) {
             Serial.println("Temperature Measurement 'Notify' enabled");
-            float BLE_temperature = NULL;
-            nr_of_tries = 0;
-            while ((BLE_temperature == NULL) && (nr_of_tries < 3)){
-              #ifdef BAROMETER_BMP280
-                BLE_temperature = bmp280.getTemperature();
-              #else if TEMPHUM_DHT
-                BLE_temperature = dht.readTemperature();
-              #endif
-              if (BLE_temperature > 0 && BLE_temperature < 40){
-                notifyTemperature(BLE_temperature*100);
-                Serial.print("Sent temperature:\t");Serial.println(BLE_temperature);
-              }else{
-                Serial.print("****************\nfailed to get temperature");Serial.println(BLE_temperature);
-                
-                BLE_temperature = NULL;
-              }
-              nr_of_tries++;
-            }
+//            float BLE_temperature = NULL;
+//            nr_of_tries = 0;
+//            while ((BLE_temperature == NULL) && (nr_of_tries < 3)){
+//              #ifdef BAROMETER_BMP280
+//                BLE_temperature = bmp280.getTemperature();
+//              #else if TEMPHUM_DHT
+//                BLE_temperature = dht.readTemperature();
+//              #endif
+//              if (BLE_temperature > 0 && BLE_temperature < 40){
+//                notifyTemperature(BLE_temperature*100);
+//                Serial.print("Sent temperature:\t");Serial.println(BLE_temperature);
+//              }else{
+//                Serial.print("****************\nfailed to get temperature");Serial.println(BLE_temperature);
+//                
+//                BLE_temperature = NULL;
+//              }
+//              nr_of_tries++;
+//            }
         } else {
             Serial.println("Temperature Measurement 'Notify' disabled");
         }
@@ -255,21 +291,21 @@ void cccd_callback(BLECharacteristic& chr, uint16_t cccd_value)
     else if (chr.uuid == humidity_characteristic.uuid) {
         if (chr.notifyEnabled()) {
             Serial.println("Humidity Measurement 'Notify' enabled");
-            float BLE_humidity = NULL;
-            nr_of_tries = 0;
-            while ((BLE_humidity == NULL) && (nr_of_tries < 3)){
-              Serial.println("In While loop");
-              BLE_humidity = dht.readHumidity();
-              if (BLE_humidity){
-                notifyHumidity(BLE_humidity*100);
-                Serial.print("Sent humidity:\t");Serial.println(BLE_humidity);
-              }else{
-                nr_of_tries++;
-                Serial.println("****************\nfailed to get humidity");
-              }
-              
-              
-            }
+//            float BLE_humidity = NULL;
+//            nr_of_tries = 0;
+//            while ((BLE_humidity == NULL) && (nr_of_tries < 3)){
+//              Serial.println("In While loop");
+//              BLE_humidity = dht.readHumidity();
+//              if (BLE_humidity){
+//                notifyHumidity(BLE_humidity*100);
+//                Serial.print("Sent humidity:\t");Serial.println(BLE_humidity);
+//              }else{
+//                nr_of_tries++;
+//                Serial.println("****************\nfailed to get humidity");
+//              }
+//              
+//              
+//            }
         } else {
             Serial.println("Humidity Measurement 'Notify' disabled");
         }
@@ -277,21 +313,21 @@ void cccd_callback(BLECharacteristic& chr, uint16_t cccd_value)
     else if (chr.uuid == pressure_characteristic.uuid) {
         if (chr.notifyEnabled()) {
             Serial.println("Pressure Measurement 'Notify' enabled");
-            float BLE_pressure = NULL;
-            nr_of_tries = 0;
-            while ((BLE_pressure == NULL) && (nr_of_tries < 3)){
-              Serial.println("In While loop");
-              BLE_pressure = bmp280.getPressure();
-              if (BLE_pressure){
-                notifyPressure(BLE_pressure*10);
-                Serial.print("Sent pressure:\t");Serial.println(BLE_pressure);
-              }else{
-                nr_of_tries++;
-                Serial.println("****************\nfailed to get pressure");
-              }
-              
-              
-            }
+//            float BLE_pressure = NULL;
+//            nr_of_tries = 0;
+//            while ((BLE_pressure == NULL) && (nr_of_tries < 3)){
+//              Serial.println("In While loop");
+//              BLE_pressure = bmp280.getPressure();
+//              if (BLE_pressure){
+//                notifyPressure(BLE_pressure*10);
+//                Serial.print("Sent pressure:\t");Serial.println(BLE_pressure);
+//              }else{
+//                nr_of_tries++;
+//                Serial.println("****************\nfailed to get pressure");
+//              }
+//              
+//              
+//            }
         } else {
             Serial.println("Humidity Measurement 'Notify' disabled");
         }

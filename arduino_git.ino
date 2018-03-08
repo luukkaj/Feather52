@@ -1,21 +1,25 @@
 #include "Arduino.h"
 #include "Wire.h"
 #include <bluefruit.h>
+#include "customGATT.h"
 
 /****************************
  * Include sensors
  */
-#define SCAN_INTERVAL   30 //seconds
 #define BAROMETER_BMP280  1
 #define TEMPHUM_DHT       1
 //#define TEMPHUM_TH02      0
-//#define VOC_COREP         1
+#define VOC_COREP         1
 #define ENABLE_BLUETOOTH  1
 //#define TENSION           1
 
 #define TEMPERATURE   TEMPHUM_DHT | BAROMETER_BMP280
 #define HUMIDITY      TEMPHUM_DHT | TEMPHUM_TH02
 #define PRESSURE      BAROMETER_BMP280
+#define VOC           VOC_COREP
+
+#define WRITE_INTERVAL    15000 //milliseconds
+#define NOTIFY_INTERVAL   2000  //milliseconds
 
 
 #ifdef ENABLE_BLUETOOTH
@@ -41,7 +45,7 @@
   DHT dht(DHTPIN, DHTTYPE, 32);
 #endif
 
-
+static void vTaskNotifyBLE( void* pvParameters);
 
 
 void setup()
@@ -74,10 +78,46 @@ void setup()
     setupBluetooth();
   #endif
 
-  
+  TaskHandle_t TaskHandle_Notify;
+  xTaskCreate(
+    vTaskNotifyBLE,
+    "notifyTask",
+    800,
+    NULL,
+    1,
+    &TaskHandle_Notify);
+    
   
   Serial.println("Setup done");
 }
+
+
+static void vTaskNotifyBLE(void* pvParameters)
+{
+  bool notification_sent = false;
+  while(1){
+    if ( Bluefruit.connected() ) {
+      if (temperature_characteristic.notifyEnabled()){
+        notifyTemperature(getTemperature());
+        notification_sent = true;
+      }
+      if (humidity_characteristic.notifyEnabled()){
+        notifyHumidity(getHumidity());
+        notification_sent = true;
+      }
+      if (pressure_characteristic.notifyEnabled()){
+        notifyPressure(getPressure());
+        notification_sent = true;
+      }
+    }
+    if (notification_sent){
+      Serial.println("");
+      notification_sent = false;
+    }
+    vTaskDelay(NOTIFY_INTERVAL);
+  }
+}
+
 
 
 
@@ -145,42 +185,27 @@ void loop()
   #ifdef ENABLE_BLUETOOTH
   if ( Bluefruit.connected() ) {
 
-    // Note: We use .notify instead of .write!
-    // If it is connected but CCCD is not enabled
-    // The characteristic's value is still updated although notification is not sent
-    //if ( temperature_characteristic.notify(hrmdata, sizeof(hrmdata)) ){
     #ifdef TEMPERATURE
       float temperature = getTemperature();
-      if (writeTemperature(temperature*100)){
-        Serial.print("DHT Temp value:\t\t ");Serial.print(temperature);Serial.println("C");
-        Serial.println("Temperature write successfull");
-      }else{
-        Serial.print("Temperature write failed. Value: ");Serial.print(temperature);Serial.println("C");
-      }
+      writeTemperature(temperature);
     #endif //Temperature
-    /*if ( notifyTemperature((uint16_t)BLE_temperature) ){
-      Serial.print("Temperature Measurement updated to: "); Serial.println(BLE_temperature); 
-    }else{
-      Serial.println("Huaa ERROR: Notify not set in the CCCD or not connected!");
-    }*/
     
     #ifdef HUMIDITY
       float humidity = getHumidity();
-      if (writeHumidity(humidity*100)){
-        Serial.print("DHT Humidity value:\t ");Serial.print(humidity);Serial.println(" %RH");
-        Serial.println("Humidity write successfull");
-      }else{
-        Serial.print("Humidity write failed. Value:");
-        Serial.print(humidity);Serial.println(" %RH");
-      }
+      writeHumidity(humidity);
     #endif // Humidity
-    /*if ( notifyHumidity((uint16_t)BLE_humidity) ){
-      Serial.print("Humidity Measurement updated to: "); Serial.println(BLE_humidity); 
-    }else{
-      Serial.println("ERROR: Notify not set in the CCCD or not connected!");
-    }*/
+
+    #ifdef PRESSURE
+      float pressure = getPressure();
+      writePressure(pressure);
+    #endif // Humidity
+      
+    #ifdef VOC
+      float tvoc = CoreP_getTVOC();
+      writeTVOC(tvoc);
+    #endif
     
-  //}
+
   #endif // ENABLE_BLUETOOTH
 
   /*******************************************
@@ -200,7 +225,8 @@ void loop()
   
 
   Serial.println("\n");//add a line between output of different times.
-  delay(5000);
+  //delay(WRITE_INTERVAL);
+  vTaskDelay(WRITE_INTERVAL);
   }
 }
 
@@ -224,5 +250,5 @@ void rtos_idle_callback(void)
 {
   // Don't call any other FreeRTOS blocking API()
   // Perform background task(s) here
-  sd_power_mode_set(NRF_POWER_MODE_LOWPWR);
+  //sd_power_mode_set(NRF_POWER_MODE_LOWPWR);
 }
