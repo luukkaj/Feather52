@@ -32,7 +32,7 @@ BLEDis bledis;    // DIS (Device Information Service) helper class instance
 BLEBas blebas;    // BAS (Battery Service) helper class instance
 
 
-bool writeTemperature(float temp){ 
+bool writeTemperature(float temp){
   if (temperature_characteristic.write32((int16_t)(temp*100))){ // write32 for int
     Serial.print("Wrote temperature:\t");Serial.println(temp);
     return true;
@@ -40,6 +40,7 @@ bool writeTemperature(float temp){
     return false;
   }
 }
+
 bool writeHumidity(float humidity){
   if (humidity_characteristic.write16((uint16_t)(humidity*100))){
     Serial.print("Wrote humidity:\t\t");Serial.println(humidity);
@@ -57,7 +58,7 @@ bool writePressure(float pressure){
   }
 }
 
-bool writeTVOC(float tvoc){
+bool writeTVOC(uint16_t tvoc){
   if (tvoc_characteristic.write16((uint16_t)(tvoc))){
     Serial.print("Wrote tvoc:\t\t");Serial.println((uint16_t)tvoc);
     return true;
@@ -65,6 +66,24 @@ bool writeTVOC(float tvoc){
     return false;
   }
 }
+
+bool writeDewPoint(float dew){
+  if (dew_point_characteristic.write8((int8_t)(dew))){
+    Serial.print("Wrote dew point:\t\t");Serial.println((int8_t)dew);
+    return true;
+  }else{
+    return false;
+  }
+}
+bool writeCoolerTemperature(float temp){ 
+  if (cooler_temp_characteristic.write32((int16_t)(temp*100))){ // write32 for int
+    Serial.print("Wrote cooler temperature:\t");Serial.println(temp);
+    return true;
+  }else{
+    return false;
+  }
+}
+
 
 
 bool notifyTemperature(float temp){
@@ -91,12 +110,26 @@ bool notifyPressure(float pressure){
     return false;
   }
 }
+bool notifyDewPoint(float dew){
+  if (dew_point_characteristic.notify8((int8_t)(dew))){
+    Serial.print("Notifyed dew point:\t");Serial.println(dew);
+    return true;
+  }else{
+    return false;
+  }
+}
+bool notifyCoolerTemperature(float temp){ 
+  if (cooler_temp_characteristic.notify32((int16_t)(temp*100))){ // write32 for int
+    Serial.print("Notifyed cooler temperature:\t");Serial.println(temp);
+    return true;
+  }else{
+    return false;
+  }
+}
 
 
 void setupBluetooth()
 {
-
-
   Serial.println("Initialise the Bluefruit nRF52 module");
   Bluefruit.begin();
   // Set power to max
@@ -156,8 +189,8 @@ void startAdv(void)
    * https://developer.apple.com/library/content/qa/qa1931/_index.html   
    */
   Bluefruit.Advertising.restartOnDisconnect(true);
-  Bluefruit.Advertising.setInterval(32, 244);    // in unit of 0.625 ms
-  Bluefruit.Advertising.setFastTimeout(60);      // number of seconds in fast mode
+  Bluefruit.Advertising.setInterval(32, 668);//244);    // in unit of 0.625 ms 244= 152,5ms 668=417,5ms
+  Bluefruit.Advertising.setFastTimeout(5);      // number of seconds in fast mode
   Bluefruit.Advertising.start(0);                // 0 = Don't stop advertising after n seconds  
 }
 
@@ -173,48 +206,71 @@ void setupBLE_EnvironmentService(void)
   // Heart Rate Control Point     0x2A39  Conditional Write       <-- Not used here
   environmental_sensing_service.begin();
 
+
+
+  #ifdef TEMPERATURE
   temperature_characteristic.setProperties(CHR_PROPS_READ | CHR_PROPS_NOTIFY);
-  #ifdef BAROMETER_BMP280
-    temperature_characteristic.setUserDescriptor("BMP280 Temp");
-  #else
-    temperature_characteristic.setUserDescriptor("DHT Temp");
-  #endif
+    #if BAROMETER_BMP280
+      temperature_characteristic.setUserDescriptor("BMP280 Temp");
+    #else
+      temperature_characteristic.setUserDescriptor("DHT Temp");
+    #endif
   temperature_characteristic.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
   temperature_characteristic.setFixedLen(2);
   temperature_characteristic.setCccdWriteCallback(cccd_callback);  // Optionally capture CCCD updates
-  //temperature_characteristic.setReadAuthorizeCallback(read_callback);  // Optionally capture CCCD updates
   temperature_characteristic.begin();
-  //uint8_t hrmdata[2] = { 0b00000110, 0x40 }; // Set the characteristic to use 8-bit values, with the sensor connected and detected
-  //temperature_characteristic.notify(hrmdata, 2);                   // Use .notify instead of .write!
-  //temperature_characteristic.notify();
+  #endif
 
+  #ifdef HUMIDITY
   humidity_characteristic.setProperties(CHR_PROPS_READ | CHR_PROPS_NOTIFY);
   humidity_characteristic.setUserDescriptor("DHT Humidity");
   humidity_characteristic.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
   humidity_characteristic.setFixedLen(2);
   humidity_characteristic.setCccdWriteCallback(cccd_callback);  // Optionally capture CCCD updates
   humidity_characteristic.begin();
+  #endif
 
+  #ifdef PRESSURE
   pressure_characteristic.setProperties(CHR_PROPS_READ | CHR_PROPS_NOTIFY);
   pressure_characteristic.setUserDescriptor("BMP280 Pressure");
   pressure_characteristic.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
   pressure_characteristic.setFixedLen(4);
   pressure_characteristic.setCccdWriteCallback(cccd_callback);  // Optionally capture CCCD updates
   pressure_characteristic.begin();
+  #endif
 
+  #ifdef VOC
   tvoc_characteristic.setProperties(CHR_PROPS_READ | CHR_PROPS_NOTIFY);
   tvoc_characteristic.setUserDescriptor("TVOC");
   tvoc_characteristic.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
   tvoc_characteristic.setFixedLen(2);
   tvoc_characteristic.setCccdWriteCallback(cccd_callback);  // Optionally capture CCCD updates
-  //tvoc_characteristic.setPresentationFormatDescriptor(0x6, 0, UUID16_UNIT_PER_MILLE, 0,0);//(type uint16_t, exponent 0, unit ~ppm
   tvoc_characteristic.begin();
+  #endif
 
+  #ifdef DEW_POINT
+  dew_point_characteristic.setProperties(CHR_PROPS_READ | CHR_PROPS_NOTIFY);
+  dew_point_characteristic.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
+  dew_point_characteristic.setFixedLen(1);
+  dew_point_characteristic.setCccdWriteCallback(cccd_callback);  // Optionally capture CCCD updates
+  dew_point_characteristic.begin(); 
+  #endif
+
+  #ifdef COOLER_TEMP
+  cooler_temp_characteristic.setProperties(CHR_PROPS_READ | CHR_PROPS_NOTIFY);
+  cooler_temp_characteristic.setUserDescriptor("Condensser temperature");
+  cooler_temp_characteristic.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
+  cooler_temp_characteristic.setFixedLen(2);
+  cooler_temp_characteristic.setCccdWriteCallback(cccd_callback);  // Optionally capture CCCD updates
+  cooler_temp_characteristic.begin();
+  #endif
   
 }
 
 void connect_callback(uint16_t conn_handle)
 {
+  xSemaphoreGive( xBLEWriteSemaphore );
+  vTaskResume(TaskHandle_Write);
   char central_name[32] = { 0 };
   Bluefruit.Gap.getPeerName(conn_handle, central_name, sizeof(central_name));
 
@@ -229,6 +285,7 @@ void disconnect_callback(uint16_t conn_handle, uint8_t reason)
 
   Serial.println("Disconnected");
   Serial.println("Advertising!");
+
 }
 
 void read_callback(BLECharacteristic& chr, ble_gatts_evt_read_t * request){

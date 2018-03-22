@@ -11,7 +11,8 @@ uint16_t CoreP_getCO2(void){
   uint8_t dataArray[9] = {0};
 
   Wire.requestFrom(VOC_SENSOR_ID, 9);
-  delay(100); // Absolute maximum conversion time
+  unsigned long start_time = millis();
+  while ((millis()-start_time) < 100){} // Absolute maximum conversion time
   while (Wire.available())
   {
     dataArray[i] = (uint8_t)Wire.read();
@@ -34,7 +35,8 @@ uint16_t CoreP_getTVOC(void){
   uint8_t dataArray[9] = {0};
 
   Wire.requestFrom(VOC_SENSOR_ID, 9);
-  delay(100); // Absolute maximum conversion time
+  unsigned long start_time = millis();
+  while ((millis()-start_time) < 100){} // Absolute maximum conversion time
   while (Wire.available())
   {
     dataArray[i] = (uint8_t)Wire.read();
